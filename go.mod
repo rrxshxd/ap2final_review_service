@@ -7,6 +7,7 @@ require (
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.3.2
 	github.com/nats-io/nats.go v1.42.0
 	github.com/sorawaslocked/ap2final_base v1.0.13
+    github.com/sorawaslocked/ap2final_protos_gen v1.0.6
 	go.mongodb.org/mongo-driver v1.17.3
 	google.golang.org/grpc v1.72.2
 )
