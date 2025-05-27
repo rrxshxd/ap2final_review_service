@@ -28,17 +28,17 @@ func NewReview(db *mongo.Database) ReviewRepository {
 func (r *reviewRepository) Create(ctx context.Context, review *models.Review) (models.Review, error) {
 	collection := r.db.Collection(reviewsCollection)
 
-	if review.ID == "" {
-		review.ID = primitive.NewObjectID().Hex()
-	}
-
 	now := time.Now()
 	review.CreatedAt = now
 	review.UpdatedAt = now
 
-	_, err := collection.InsertOne(ctx, review)
+	result, err := collection.InsertOne(ctx, review)
 	if err != nil {
 		return models.Review{}, err
+	}
+
+	if oid, ok := result.InsertedID.(primitive.ObjectID); ok {
+		review.ID = oid.Hex()
 	}
 
 	return *review, nil
@@ -49,14 +49,17 @@ func (r *reviewRepository) FindByID(ctx context.Context, id string) (models.Revi
 
 	var review models.Review
 
-	objectID, err := primitive.ObjectIDFromHex(id)
-	if err != nil {
-		return models.Review{}, models.ErrReviewNotFound
+	filter := bson.M{"_id": id}
+	err := collection.FindOne(ctx, filter).Decode(&review)
+
+	if err == mongo.ErrNoDocuments {
+		objectID, convErr := primitive.ObjectIDFromHex(id)
+		if convErr == nil {
+			filter = bson.M{"_id": objectID}
+			err = collection.FindOne(ctx, filter).Decode(&review)
+		}
 	}
 
-	filter := bson.M{"_id": objectID}
-
-	err = collection.FindOne(ctx, filter).Decode(&review)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			return models.Review{}, models.ErrReviewNotFound
@@ -136,11 +139,6 @@ func (r *reviewRepository) Find(ctx context.Context, filter models.ReviewFilter)
 func (r *reviewRepository) Update(ctx context.Context, id string, update models.ReviewUpdateData) (models.Review, error) {
 	collection := r.db.Collection(reviewsCollection)
 
-	objectID, err := primitive.ObjectIDFromHex(id)
-	if err != nil {
-		return models.Review{}, models.ErrReviewNotFound
-	}
-
 	updateDoc := bson.M{"$set": bson.M{"updated_at": time.Now()}}
 	setDoc := updateDoc["$set"].(bson.M)
 
@@ -156,11 +154,21 @@ func (r *reviewRepository) Update(ctx context.Context, id string, update models.
 		setDoc["is_deleted"] = *update.IsDeleted
 	}
 
-	filter := bson.M{"_id": objectID}
+	var filter bson.M
+	var updatedReview models.Review
+
 	opts := options.FindOneAndUpdate().SetReturnDocument(options.After)
 
-	var updatedReview models.Review
-	err = collection.FindOneAndUpdate(ctx, filter, updateDoc, opts).Decode(&updatedReview)
+	filter = bson.M{"_id": id}
+	err := collection.FindOneAndUpdate(ctx, filter, updateDoc, opts).Decode(&updatedReview)
+
+	if err == mongo.ErrNoDocuments {
+		if objectID, convErr := primitive.ObjectIDFromHex(id); convErr == nil {
+			filter = bson.M{"_id": objectID}
+			err = collection.FindOneAndUpdate(ctx, filter, updateDoc, opts).Decode(&updatedReview)
+		}
+	}
+
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			return models.Review{}, models.ErrReviewNotFound

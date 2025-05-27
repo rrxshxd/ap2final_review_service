@@ -1,0 +1,10 @@
+env: "local"
+
+mongo:
+  database: "review_service"
+  uri: "localhost:27017"
+
+server:
+  grpc:
+    port: 8082
+    timeout: 10h
